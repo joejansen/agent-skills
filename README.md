@@ -5,6 +5,11 @@ agentic coding tools — Claude Code, Codex, and the Blocks app. Drop these
 into your tool of choice to get a higher-quality default workflow for
 shipping, reviewing, and finishing pull requests.
 
+The skills here follow the [Agent Skills specification](https://agentskills.io/specification):
+each skill is a directory containing a `SKILL.md` with `name` and
+`description` frontmatter, and `name` matches the parent directory. That
+keeps them portable across any tool that reads the spec.
+
 ## What's inside
 
 ```
@@ -66,9 +71,32 @@ load from the repo at runtime — no file copying required.
 
 ### Codex
 
-Codex picks up `AGENTS.md`-style instructions per repo. The skill markdown
-here can be referenced manually (e.g., `cat skills/finish/SKILL.md` and pass
-to Codex) until Codex supports auto-loading skills from a config repo.
+Codex auto-loads skills from a few [`.agents/skills/` locations](https://developers.openai.com/codex/skills),
+checked in this order of precedence:
+
+1. `$CWD/.agents/skills` (walking up to the repo root)
+2. `$REPO_ROOT/.agents/skills`
+3. `$HOME/.agents/skills`
+4. `/etc/codex/skills`
+
+The simplest install is a single symlink at user scope so every project
+inherits these skills:
+
+```bash
+git clone https://github.com/joejansen/agent-skills.git ~/code/agent-skills
+mkdir -p ~/.agents
+ln -s ~/code/agent-skills/skills ~/.agents/skills
+```
+
+Or per-repo, if you want a project to bundle them:
+
+```bash
+mkdir -p /your/project/.agents
+ln -s ~/code/agent-skills/skills /your/project/.agents/skills
+```
+
+Codex matches skills implicitly via the `description` field, so each skill's
+description should clearly state when it should and shouldn't trigger.
 
 ### Hooks
 
