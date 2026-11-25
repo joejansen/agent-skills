@@ -1,0 +1,4 @@
+interface:
+  display_name: "Joe Ship"
+  short_description: "Implement, verify, and finish a pull request"
+  default_prompt: "Use $joe-ship to deliver this approved issue or spec slice through a merge-ready PR."

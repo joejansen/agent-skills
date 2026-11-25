@@ -1,129 +1,60 @@
 # Hooks
 
-These are shell scripts you wire into your agent's `settings.json`. They
-aren't loaded automatically — the harness only runs hooks you've registered.
+Shell scripts for Claude Code hooks. The harness runs only hooks registered in
+a `settings.json` (`~/.claude/settings.json` for every project, or a project's
+`.claude/settings.json`).
+
+Hook input arrives as JSON on stdin (for Edit/Write, the path is
+`tool_input.file_path`). Claude Code does not set a `CLAUDE_FILE_PATH`
+environment variable; an inline hook that reads one silently does nothing.
 
 ## What's here
 
-| Script | Type | Purpose |
+| Script | Event / matcher | Purpose |
 | --- | --- | --- |
-| `expert-review-gate.sh` | `Stop` | Block stopping if files have changed since the last `/expert-review-panel` run. |
-| `expert-review-pre-skill.sh` | `PreToolUse` (Skill) | Detect when `/expert-review-panel` is about to run; set a pending marker. |
-| `expert-review-post-skill.sh` | `PostToolUse` (Skill) | After `/expert-review-panel` finishes, record the working-tree hash so `Stop` knows the change is reviewed. |
-| `ruff-check-gate.sh` | `Stop` | Block stopping if `ruff check` or `ruff format --check` would fail. Configurable via `RUFF_TARGET` env var. |
+| `block-env-edits.sh` | `PreToolUse` `Edit\|Write` | Blocks edits to `.env` and `.env.*` (allows `.env.example`), case-insensitively and through symlinks. Fails closed on unparseable input. Needs `python3`. |
+| `ruff-format-file.sh` | `PostToolUse` `Edit\|Write` | Runs `ruff check --fix` and `ruff format` on an edited `.py` file inside the project. Prefers `.venv/bin/ruff`, else `ruff` on PATH. |
+| `ruff-check-gate.sh` | `Stop` | Blocks stopping while `ruff check` / `ruff format --check` fail (`RUFF_TARGET`, default `.`). Skips under GitHub Actions; if ruff is missing it blocks once, then lets the agent stop and report lint as unverified. |
+| `anchor-bash-cwd.sh` | `PreToolUse` `Bash` | Prefixes every Bash command with `cd <project root> &&` (or the session's `.claude/worktrees/<name>` worktree), so a `cd` in one call never leaks into the next. Needs `jq`. |
+| `bash-failure-context.sh` | `PostToolUseFailure` `Bash` | After a failed Bash call, tells the agent commands are anchored to the project root, so it fixes relative-path mistakes itself. Pair with `anchor-bash-cwd.sh`. Needs `jq`. |
 
-The three `expert-review-*` scripts are a coordinated set — install all three
-or none of them. Together they enforce: "you must run the expert review panel
-on the current change before the agent is allowed to stop."
+The ruff hooks are a Python example; copy the pattern for `eslint`, `mypy`,
+`cargo clippy`, and so on. Running a project's `.venv/bin/ruff` runs code the
+project controls, so wire them only into repositories you trust.
 
 ## Setup
 
-1. Make the scripts executable:
-   ```bash
-   chmod +x hooks/*.sh
-   ```
-
-2. Either symlink the `hooks/` directory into each project that wants them:
-   ```bash
-   ln -s /absolute/path/to/agent-skills/hooks /your/project/.claude/hooks
-   ```
-   or copy the individual scripts into the project's `.claude/hooks/`.
-
-3. Add hook entries to the project's `.claude/settings.json` (or your global
-   `~/.claude/settings.json`). Example wiring all four:
-
-   ```json
-   {
-     "hooks": {
-       "PreToolUse": [
-         {
-           "matcher": "Skill",
-           "hooks": [
-             {
-               "type": "command",
-               "command": "bash .claude/hooks/expert-review-pre-skill.sh"
-             }
-           ]
-         }
-       ],
-       "PostToolUse": [
-         {
-           "matcher": "Skill",
-           "hooks": [
-             {
-               "type": "command",
-               "command": "bash .claude/hooks/expert-review-post-skill.sh"
-             }
-           ]
-         }
-       ],
-       "Stop": [
-         {
-           "hooks": [
-             { "type": "command", "command": "bash .claude/hooks/expert-review-gate.sh" }
-           ]
-         },
-         {
-           "hooks": [
-             { "type": "command", "command": "RUFF_TARGET=. bash .claude/hooks/ruff-check-gate.sh" }
-           ]
-         }
-       ]
-     }
-   }
-   ```
-
-## Inline hooks (no script needed)
-
-A couple of patterns are short enough to keep inline in `settings.json`
-rather than as standalone scripts. Two I use often:
-
-### Auto-format Python on Edit/Write
-
-```json
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "FILE=\"$CLAUDE_FILE_PATH\"; if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q '\\.py$'; then ruff check --fix --quiet \"$FILE\"; ruff format --quiet \"$FILE\"; fi"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-### Block edits to `.env` files (allow `.env.example`)
+Make the scripts executable (`chmod +x hooks/*.sh`) and reference them by
+absolute path, or copy them into a project's `.claude/hooks/`. Example for
+user scope (replace `<agent-skills>` with your clone's absolute path):
 
 ```json
 {
   "hooks": {
     "PreToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "FILE=\"$CLAUDE_FILE_PATH\"; if [ -z \"$FILE\" ]; then exit 0; fi; if echo \"$FILE\" | grep -q '\\.env\\.example$'; then exit 0; fi; if echo \"$FILE\" | grep -qE '(^|/)\\.env(\\..+)?$'; then echo 'BLOCKED: Do not modify .env files — use .env.example instead' >&2; exit 2; fi"
-          }
-        ]
-      }
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "<agent-skills>/hooks/anchor-bash-cwd.sh", "timeout": 10 } ] },
+      { "matcher": "Edit|Write", "hooks": [ { "type": "command", "command": "bash <agent-skills>/hooks/block-env-edits.sh" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write", "hooks": [ { "type": "command", "command": "bash <agent-skills>/hooks/ruff-format-file.sh" } ] }
+    ],
+    "PostToolUseFailure": [
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "<agent-skills>/hooks/bash-failure-context.sh", "timeout": 10 } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "RUFF_TARGET=. bash <agent-skills>/hooks/ruff-check-gate.sh" } ] }
     ]
   }
 }
 ```
 
+In a project's `.claude/settings.json`, use
+`bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/<script>.sh` so the path works from
+any checkout or worktree.
+
 ## Caveats
 
-- All hooks assume a git repo. They `exit 0` (skip silently) when run outside
-  one so they don't block `/init` or scratch sessions.
-- `ruff-check-gate.sh` blocks (exit 2) if `ruff` isn't installed. That's a
-  feature: if you wired this hook, it's because you want lint enforcement.
-  Remove the hook for projects that don't use ruff.
-- `expert-review-*` scripts write small marker files (`.claude/expert-review-pending`,
-  `.claude/expert-review-hash`). Add these to your `.gitignore`.
+- Every script exits 0 (skips) outside a git repository or when there is
+  nothing for it to act on, so scratch sessions aren't blocked.
+- `anchor-bash-cwd.sh` rewrites every Bash command. Some harnesses also run
+  their own cwd hooks; don't stack two rewriters.

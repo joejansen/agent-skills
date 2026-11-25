@@ -1,116 +1,78 @@
 ---
 name: requirements-interview
-description: Deep requirements gathering through structured interviews. Use when the user asks to "interview me", "gather requirements", "help me think through", "spec out", "write a spec", or needs comprehensive understanding before implementation. Triggers on phrases like "ask me questions about the project", "help me plan", or "let's define requirements".
-version: 1.0.0
+description: Conduct a deep, adaptive requirements interview and produce a repository-grounded, adversarially reviewed implementation spec. Use for ambiguous features, architecture choices, large fixes, spec writing, or when the user asks to be interviewed.
 ---
 
-# Requirements Interview Skill
+# Requirements Interview
 
-Conduct thorough, in-depth interviews to gather comprehensive requirements before implementation. This skill uses the AskUserQuestion tool to systematically explore all aspects of a project.
+Keep requirements, tradeoffs, and decisions in the primary conversation. Use
+read-only scouts to verify repository facts; never delegate the interview or
+final synthesis.
 
-## Interview Process
+## Interview
 
-### Phase 1: Project Foundation
+Start by inspecting repository guidance, related code, existing specs, and
+tests so questions are informed rather than generic. Ask one to three focused
+questions per round and adapt to each answer. Periodically summarize decisions,
+assumptions, and unresolved points for correction.
 
-Start by understanding the core vision:
+Cover only relevant dimensions, but do not omit a material one:
 
-- What problem is being solved?
-- Who are the users/stakeholders?
-- What does success look like?
-- What are the non-negotiables vs nice-to-haves?
+- problem, users, workflows, success measures, scope, and non-goals;
+- the simplest design that fully meets the need: what is deliberately not
+  built, and the reason for each new table, setting, screen, or abstraction;
+- current behavior and compatibility commitments;
+- data ownership, lifecycle, migrations, backfill, rollback, and deletion;
+- permissions, tenant isolation, privacy, validation, and abuse cases;
+- APIs, integrations, retries, idempotency, partial failure, and recovery;
+- UI states, accessibility, empty/loading/error states, and operator workflow;
+- post-deploy work: what runs itself (data migration, deploy hook, or
+  self-pacing background job) and what, if anything, genuinely needs a human
+  decision, and why;
+- performance limits, concurrency, observability, rollout, and support;
+- alternatives, tradeoffs, dependencies, risks, and explicit open questions.
 
-### Phase 2: Technical Deep-Dive
+Probe with concrete scenarios and counterexamples. Distinguish facts verified
+in the repository from user decisions and agent assumptions.
 
-Explore implementation details:
+## Draft the contract
 
-- Architecture and system design decisions
-- Data models and state management
-- API contracts and integration points
-- Performance requirements and constraints
-- Security considerations and threat models
-- Scalability expectations
+Draft the spec in the conversation first. Include:
 
-### Phase 3: User Experience & Interface
+1. Context and problem
+2. Goals, non-goals, and success measures
+3. Current-state evidence
+4. User and operator flows
+5. Functional requirements and invariants
+6. Data model, API, permission, and integration contracts
+7. Failure, recovery, migration, rollback, and observability behavior
+8. Testable acceptance criteria
+9. Vertical implementation slices with dependencies (normally one PR per
+   slice)
+10. Simpler designs considered and why they were rejected
+11. Risks, decisions, and blocking versus non-blocking open questions
 
-Understand the human side:
+Every acceptance criterion must be observable and every slice independently
+testable. Do not prescribe code that contradicts the repository. A spec is an
+implementation contract, not an idea dump: resolve user-visible behavior,
+scope, data ownership, failure and recovery, migrations/backfill/rollback,
+observability, security, and post-deploy work before writing it.
 
-- User flows and journeys
-- Edge cases in user interaction
-- Error states and recovery paths
-- Accessibility requirements
-- Device/platform considerations
-- Loading states and perceived performance
+## Adversarial spec gate
 
-### Phase 4: Concerns & Risks
+Before writing markdown:
 
-Surface potential issues:
+1. Have a fresh reviewer, at the repository's review tier for the spec, look
+   for contradictions, ambiguity, missing failure
+   states, untestable criteria, and scope leakage.
+2. Have a fresh repository reviewer verify every material code-path and
+   integration claim.
+3. Trigger security, domain, data, UX, or reliability review only when the
+   spec touches that risk.
+4. Revise the draft and present key tradeoffs and all blocking questions.
+5. Obtain explicit user approval.
 
-- What could go wrong?
-- What are you most worried about?
-- What's been tried before that didn't work?
-- What constraints exist (time, budget, tech stack)?
-- What dependencies or blockers exist?
-
-### Phase 5: Tradeoffs & Priorities
-
-Make explicit decisions:
-
-- Speed vs quality tradeoffs
-- Build vs buy decisions
-- Simplicity vs flexibility
-- MVP scope vs full vision
-- Technical debt tolerance
-
-## Interview Guidelines
-
-**Ask non-obvious questions.** Don't ask "What features do you want?" Instead ask:
-
-- "What's the most annoying thing about current solutions?"
-- "If this fails, what's the most likely reason?"
-- "What would make you delete this app after a week?"
-- "Which user would get the MOST value, and which would get the LEAST?"
-- "What's the smallest version of this that would still be useful?"
-- "What happens when the network goes down mid-operation?"
-- "How will you know if this is successful in 6 months?"
-
-**Dig deeper when useful.** When the user answers:
-
-- Ask "Why?" if the answer seems wrong or shallow
-- Ask for specific examples
-- Ask about exceptions and edge cases
-- Challenge assumptions respectfully
-- Explore the implications of their answers
-
-**Cover blind spots.** Proactively ask about things users often forget:
-
-- Offline/degraded mode behavior
-- Data migration from existing systems
-- Internationalization/localization
-- Audit logging and compliance
-- Backup and disaster recovery
-- Admin/operator experience (not just end users)
-- Onboarding and first-run experience
-- Sunset and data deletion
-
-**Use the AskUserQuestion tool effectively:**
-
-- Ask 1-4 focused questions per turn
-- Provide options when helpful, but always allow "Other"
-- Group related questions together
-- Adapt based on previous answers
-
-## Spec Output Format
-
-After the interview is complete, write a comprehensive spec to a file or plan document.
-
-## Execution Instructions
-
-1. **Begin the interview** by introducing what you'll cover and asking about the project at a high level
-2. **Use AskUserQuestion tool** for each round of questions - ask 2-4 questions per turn
-3. **Adapt your questions** based on answers - don't follow a rigid script
-4. **Go deep before going wide** - fully explore one area before moving to the next
-5. **Continue until complete** - don't stop early, cover all phases
-6. **Summarize periodically** - reflect back what you've learned to validate understanding
-7. **Ask if there's more** - before writing the spec, ask if there's anything else they want to add
-8. **Write the spec** - create a file with the comprehensive specification
-9. **Review with user** - offer to clarify or expand any section
+Only then write the approved spec to the repository's spec location (ask if it
+has none). Preserve unresolved non-blocking questions explicitly. Do not
+implement unless separately asked; hand off the approved spec or one named
+vertical slice to `$joe-ship`.

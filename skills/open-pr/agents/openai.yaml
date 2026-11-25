@@ -1,0 +1,4 @@
+interface:
+  display_name: "Open PR"
+  short_description: "Commit, push, and open a verified PR"
+  default_prompt: "Use $open-pr to publish the verified task-owned changes as a clear pull request."
