@@ -12,7 +12,7 @@ environment variable; an inline hook that reads one silently does nothing.
 
 | Script | Event / matcher | Purpose |
 | --- | --- | --- |
-| `block-env-edits.sh` | `PreToolUse` `Edit\|Write` | Blocks edits to `.env` and `.env.*` (allows `.env.example`). Fails closed if it can't parse its input. Needs `python3`. |
+| `block-env-edits.sh` | `PreToolUse` `Edit\|Write` | Blocks edits to `.env` and `.env.*` (allows `.env.example`), case-insensitively and through symlinks. Fails closed on unparseable input. Needs `python3`. |
 | `ruff-format-file.sh` | `PostToolUse` `Edit\|Write` | Runs `ruff check --fix` and `ruff format` on an edited `.py` file inside the project. Prefers `.venv/bin/ruff`, else `ruff` on PATH. |
 | `ruff-check-gate.sh` | `Stop` | Blocks stopping while `ruff check` / `ruff format --check` fail (`RUFF_TARGET`, default `.`). Skips under GitHub Actions; if ruff is missing it blocks once, then lets the agent stop and report lint as unverified. |
 | `anchor-bash-cwd.sh` | `PreToolUse` `Bash` | Prefixes every Bash command with `cd <project root> &&` (or the session's `.claude/worktrees/<name>` worktree), so a `cd` in one call never leaks into the next. Needs `jq`. |
