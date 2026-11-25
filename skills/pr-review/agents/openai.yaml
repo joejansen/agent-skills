@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR Review"
+  short_description: "Resolve material PR feedback without bot loops"
+  default_prompt: "Use $pr-review to collect every feedback surface and bring the PR to green without requesting bot re-reviews."

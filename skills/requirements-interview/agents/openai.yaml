@@ -1,0 +1,4 @@
+interface:
+  display_name: "Requirements Interview"
+  short_description: "Interview deeply and produce an approved spec"
+  default_prompt: "Use $requirements-interview to interview me, ground decisions in the repository, and draft an adversarially reviewed spec."

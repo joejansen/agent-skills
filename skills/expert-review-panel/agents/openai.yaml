@@ -1,0 +1,4 @@
+interface:
+  display_name: "Expert Review Panel"
+  short_description: "Run focused fresh-context adversarial review"
+  default_prompt: "Use $expert-review-panel to review this work with independent risk-triggered lenses and converge on no material findings."

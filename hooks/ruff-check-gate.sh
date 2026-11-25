@@ -1,49 +1,58 @@
 #!/usr/bin/env bash
 # ruff-check-gate.sh — Stop hook (Python / ruff example)
 #
-# Blocks stopping if `ruff check` or `ruff format --check` would fail.
-# Useful as a CI mirror so the agent can't declare "done" while lint is broken.
+# Blocks stopping if `ruff check` or `ruff format --check` would fail, so the
+# agent can't declare "done" while lint is broken.
 #
-# Configure the lint target with the RUFF_TARGET env var (default: ".").
-# Example: RUFF_TARGET=src/ in your settings.json hook command.
+# Configure the lint target with RUFF_TARGET (default: "."), e.g.
+#   RUFF_TARGET=src/ bash .claude/hooks/ruff-check-gate.sh
 #
-# This is intended as a *pattern* — copy it and adapt for other tools:
-#   - pytest:  run tests, fail closed
-#   - eslint:  npx eslint "$ESLINT_TARGET"
-#   - mypy:    mypy "$MYPY_TARGET"
-#   - cargo:   cargo check / cargo clippy
+# Uses the project's .venv/bin/ruff when present (matching the lockfile CI
+# uses), else ruff on PATH. Running the project's ruff runs project-controlled
+# code: wire this only into repositories you trust.
+#
+# This is a pattern — copy it for pytest, eslint, mypy, cargo clippy, etc. The
+# load-bearing parts: lint the project root, skip in CI runners, exit 2 to
+# block, and block at most once per stop when the tool can't run at all.
 
-# Skip if not inside a git repository (don't block scratch/agentic edits)
-if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
+ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+if [ -z "$ROOT" ] || ! git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  exit 0
+fi
+cd "$ROOT" || exit 0
+
+# An agent running inside GitHub Actions has no project environment; CI owns
+# lint there, and blocking would only loop every run.
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
   exit 0
 fi
 
-# cd to repo root so the lint runs the same way CI would
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-if [ -z "$REPO_ROOT" ]; then
-  exit 0
-fi
-cd "$REPO_ROOT"
+INPUT=$(cat)
 
-# Block if ruff is not installed — install with: uv pip install ruff
-if ! command -v ruff >/dev/null 2>&1; then
-  echo "BLOCKED: ruff not found in PATH. Install with: uv pip install ruff" >&2
+if [ -x "$ROOT/.venv/bin/ruff" ]; then
+  RUFF="$ROOT/.venv/bin/ruff"
+elif command -v ruff >/dev/null 2>&1; then
+  RUFF=ruff
+else
+  # A session that can't install ruff can never satisfy this gate, so block
+  # once: when this stop already follows a Stop-hook block (stop_hook_active),
+  # let it end with lint unverified rather than loop forever.
+  if printf '%s' "$INPUT" | python3 -I -c 'import json, sys; sys.exit(0 if json.load(sys.stdin).get("stop_hook_active") is True else 1)' 2>/dev/null; then
+    exit 0
+  fi
+  echo "BLOCKED: ruff not found (.venv/bin/ruff or PATH). Install it, or say plainly in your final report that the Python changes are unlinted." >&2
   exit 2
 fi
 
 TARGET="${RUFF_TARGET:-.}"
 SUCCESS=true
-
-if ! ruff check "$TARGET" 2>&1; then
-  SUCCESS=false
-fi
-
-if ! ruff format --check "$TARGET" 2>&1; then
-  SUCCESS=false
-fi
+"$RUFF" check "$TARGET" 2>&1 || SUCCESS=false
+"$RUFF" format --check "$TARGET" 2>&1 || SUCCESS=false
 
 if [ "$SUCCESS" = false ]; then
   echo "" >&2
   echo "BLOCKED: Fix ruff lint/format issues before finishing." >&2
   exit 2
 fi
+exit 0

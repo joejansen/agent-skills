@@ -1,0 +1,4 @@
+interface:
+  display_name: "Finish PR"
+  short_description: "Bring an existing PR to merge-ready state"
+  default_prompt: "Use $finish to independently review and finish this existing pull request."
